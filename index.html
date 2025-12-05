@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RC 단철근 직사각형 보 설계 및 검토</title>
+    <style>
+        body { font-family: 'Pretendard', 'Malgun Gothic', sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .container { background: white; padding: 2.5rem; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 480px; }
+        h2 { text-align: center; color: #2c3e50; margin-bottom: 25px; border-bottom: 3px solid #007BFF; padding-bottom: 15px; }
+        
+        /* 입력 필드 레이아웃 */
+        .input-section { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .input-group { display: flex; flex-direction: column; }
+        .input-group.full-width { grid-column: span 2; }
+        
+        label { font-weight: 600; color: #555; font-size: 0.9rem; margin-bottom: 5px; }
+        input { padding: 10px; border: 1px solid #ddd; border-radius: 8px; text-align: right; font-size: 1rem; transition: 0.3s; }
+        input:focus { border-color: #007BFF; outline: none; box-shadow: 0 0 0 3px rgba(0,123,255,0.1); }
+        
+        /* 버튼 그룹 스타일 */
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+        button { flex: 1; padding: 15px; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: transform 0.1s; }
+        button:hover { transform: translateY(-2px); }
+        
+        .btn-calc { background: linear-gradient(135deg, #007BFF, #0056b3); color: white; }
+        .btn-reset { background: #e9ecef; color: #495057; }
+        .btn-reset:hover { background: #dee2e6; }
+
+        /* 결과창 스타일 */
+        .result-box { margin-top: 25px; padding: 20px; background: #f8f9fa; border-radius: 12px; border: 1px solid #e9ecef; display: none; }
+        .section-title { font-weight: 800; color: #333; margin: 15px 0 10px 0; border-left: 4px solid #007BFF; padding-left: 10px; font-size: 1.05rem; }
+        .result-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.95rem; }
+        .status-ok { color: #28a745; font-weight: bold; }
+        .status-ng { color: #dc3545; font-weight: bold; }
+        .final-val { font-size: 1.2rem; color: #007BFF; font-weight: bold; text-align: right; }
+        .note { font-size: 0.8rem; color: #888; margin-top: 5px; text-align: right;}
+        
+        /* 에러 메시지 스타일 */
+        .error-msg { color: #dc3545; background-color: #f8d7da; padding: 10px; border-radius: 6px; text-align: center; font-weight: bold; margin-bottom: 10px; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>RC 보 단면 설계기</h2>
+    
+    <div class="input-section">
+        <div class="input-group">
+            <label>콘크리트 fck (MPa)</label>
+            <input type="number" id="fck" placeholder="예: 24">
+        </div>
+        <div class="input-group">
+            <label>철근 fy (MPa)</label>
+            <input type="number" id="fy" placeholder="예: 400">
+        </div>
+        <div class="input-group">
+            <label>보 폭 b (mm)</label>
+            <input type="number" id="b" placeholder="예: 300">
+        </div>
+        <div class="input-group">
+            <label>유효 깊이 d (mm)</label>
+            <input type="number" id="d" placeholder="예: 500">
+        </div>
+        <div class="input-group full-width">
+            <label style="color:#0056b3;">계수 모멘트 Mu (kN·m)</label>
+            <input type="number" id="mu" placeholder="예: 200">
+        </div>
+        <div class="input-group full-width">
+            <label style="color:#d63384;">계수 전단력 Vu (kN)</label>
+            <input type="number" id="vu" placeholder="예: 150">
+        </div>
+    </div>
+
+    <div class="btn-group">
+        <button class="btn-reset" onclick="resetFields()">초기화</button>
+        <button class="btn-calc" onclick="calculate()">설계 수행</button>
+    </div>
+
+    <div id="result" class="result-box"></div>
+</div>
+
+<script>
+    function calculate() {
+        // 결과창 요소 가져오기
+        const resBox = document.getElementById('result');
+        resBox.style.display = 'block'; // 일단 보이게 설정
+
+        // 1. 입력값 가져오기 (문자열 상태)
+        const val_fck = document.getElementById('fck').value;
+        const val_fy = document.getElementById('fy').value;
+        const val_b = document.getElementById('b').value;
+        const val_d = document.getElementById('d').value;
+        const val_mu = document.getElementById('mu').value;
+        const val_vu = document.getElementById('vu').value;
+
+        // 2. 유효성 검사 (빈값 체크)
+        if (!val_fck || !val_fy || !val_b || !val_d || !val_mu || !val_vu) {
+            resBox.innerHTML = "<div class='error-msg'>⚠️ 모든 값을 입력해주세요.</div>";
+            return;
+        }
+
+        // 숫자 변환
+        const fck = parseFloat(val_fck);
+        const fy = parseFloat(val_fy);
+        const b = parseFloat(val_b);
+        const d = parseFloat(val_d);
+        const Mu_kNm = parseFloat(val_mu);
+        const Vu_kN = parseFloat(val_vu);
+
+        // 3. 유효성 검사 (음수/0 체크 - 물리적 성질)
+        if (fck <= 0 || fy <= 0 || b <= 0 || d <= 0) {
+             resBox.innerHTML = "<div class='error-msg'>⚠️ 강도와 치수는 0보다 커야 합니다.</div>";
+             return;
+        }
+        if (Mu_kNm < 0 || Vu_kN < 0) {
+             resBox.innerHTML = "<div class='error-msg'>⚠️ 하중(Mu, Vu)은 양수로 입력해주세요.</div>";
+             return;
+        }
+
+        // ================= 검사 통과: 계산 시작 =================
+        let html = "";
+
+        // --- 1. 휨 설계 ---
+        const Mu = Mu_kNm * 1e6; 
+        const phi_m = 0.85; 
+        
+        const Rn = Mu / (phi_m * b * d * d);
+        const checkTerm = 1 - (2 * Rn) / (0.85 * fck);
+
+        html += "<div class='section-title'>1. 휨 설계 및 철근비 검토</div>";
+
+        if (checkTerm < 0) {
+            html += "<div class='status-ng'>⛔ 치명적 오류: 단면 부족 (파괴 위험).<br>b 또는 d를 더 키우세요.</div>";
+        } else {
+            const rho_req = (0.85 * fck / fy) * (1 - Math.sqrt(checkTerm));
+            const rho_min = Math.max(1.4 / fy, 0.25 * Math.sqrt(fck) / fy);
+
+            let beta1 = 0.85;
+            if (fck > 28) {
+                beta1 = 0.85 - 0.007 * (fck - 28);
+                if (beta1 < 0.65) beta1 = 0.65;
+            }
+            const rho_max = (0.85 * beta1 * fck / fy) * (0.003 / (0.003 + 0.005));
+            const rho_design = Math.max(rho_req, rho_min);
+            const As_final = rho_design * b * d;
+
+            let minCheck = (rho_req >= rho_min) ? "설계값 > 최소값 (OK)" : "설계값 < 최소값 (최소철근비 적용)";
+            html += `<div class='result-row'><span>• 최소 철근비(${rho_min.toFixed(4)})</span> <span>${minCheck}</span></div>`;
+
+            let maxCheck = (rho_design <= rho_max) ? "<span class='status-ok'>만족 (OK)</span>" : "<span class='status-ng'>불만족 (NG)</span>";
+            html += `<div class='result-row'><span>• 최대 철근비(${rho_max.toFixed(4)})</span> <span>${maxCheck}</span></div>`;
+
+            html += `<hr style='margin:10px 0; border-top:1px dashed #ccc;'>`;
+            html += `<div class='result-row'><span>필요 철근량 (As)</span> <span class='final-val'>${As_final.toFixed(0)} mm²</span></div>`;
+            
+            const numBars = Math.ceil(As_final / 387);
+            html += `<div class='note'>➡ 추천 배근: <b>${numBars}-D22</b></div>`;
+        }
+
+        // --- 2. 전단 설계 ---
+        html += "<div class='section-title'>2. 전단 설계 (스터럽)</div>";
+        
+        const Vu = Vu_kN * 1000;
+        const phi_v = 0.75;
+        const Vc = (1/6) * Math.sqrt(fck) * b * d;
+        const phiVc = phi_v * Vc;
+
+        if (Vu <= phiVc / 2) {
+            html += "<div class='result-row'><span>전단 상태</span> <span class='status-ok'>안전 (철근 불필요)</span></div>";
+        } else {
+            const Vs = (Vu / phi_v) - Vc;
+            
+            if (Vs < 0) {
+                 html += "<div class='result-row'><span>전단 상태</span> <span>최소 스터럽 필요</span></div>";
+                 html += `<div class='result-row'><span>추천 간격</span> <span class='final-val'>D10 @ 300</span></div>`;
+            } else {
+                const Av = 142.66;
+                let s = (Av * fy * d) / Vs;
+                const s_max = Math.min(d/2, 600);
+                s = Math.min(s, s_max);
+                s = Math.floor(s / 10) * 10;
+                
+                if (s < 50) {
+                    html += "<div class='status-ng'>⚠️ 전단 위험: 단면을 키우세요.</div>";
+                } else {
+                    html += `<div class='result-row'><span>계산 간격</span> <span>${s} mm</span></div>`;
+                    html += `<div class='result-row'><span>추천 배근</span> <span class='final-val'>D10 @ ${s}</span></div>`;
+                }
+            }
+        }
+
+        resBox.innerHTML = html;
+    }
+
+    // 초기화 함수
+    function resetFields() {
+        // 모든 input 태그의 값을 빈 문자열로 설정
+        const inputs = document.querySelectorAll('input');
+        inputs.forEach(input => input.value = '');
+        
+        // 결과창 숨기기
+        const resBox = document.getElementById('result');
+        resBox.style.display = 'none';
+        resBox.innerHTML = '';
+    }
+</script>
+
+</body>
+</html>
